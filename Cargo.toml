@@ -1,0 +1,16 @@
+[package]
+name = "cellfie-runtime-predictor"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+csv = "^1"
+env_logger = "^0.9"
+humantime = "^2.1"
+itertools = "^0.10"
+log = { version = "^0.4", features = ["std"] }
+serde = { version = "^1", features = ["derive"] }
+smartcore = "^0.2"
+clap = { version = "^3.1", features = ["derive"] }
