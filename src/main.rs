@@ -111,7 +111,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     results.push(knn_predict_results.get(0));
 
     info!("Duration: {}", format_duration(start.elapsed()).to_string());
-    print!("{}\n", results.mean() as i32);
+    print!("{}", results.mean() as i32);
     Ok(())
 }
 
