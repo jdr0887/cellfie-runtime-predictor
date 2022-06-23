@@ -17,6 +17,7 @@ use smartcore::linear::ridge_regression::{RidgeRegression, RidgeRegressionParame
 use smartcore::neighbors::knn_regressor::{KNNRegressor, KNNRegressorParameters};
 use smartcore::preprocessing::series_encoder;
 use smartcore::svm::svr::{SVRParameters, SVR};
+use smartcore::svm::Kernels;
 use smartcore::tree::decision_tree_regressor::{DecisionTreeRegressor, DecisionTreeRegressorParameters};
 use std::error;
 use std::fmt;
@@ -37,14 +38,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let options = Options::parse();
     debug!("{:?}", options);
 
+    let rows = *&options.rows as f64;
+    let cols = *&options.columns as f64;
+
     let raw_training_data = std::include_str!("data/cellfie-run-time.csv");
 
     let (x, y) = load_dataset(raw_training_data)?;
 
     let mut new_data: Vec<Vec<f64>> = Vec::new();
-    let rows = *&options.rows as f64;
-    let cols = *&options.columns as f64;
-    let entry = vec![cols, rows];
+    let entry = vec![rows, cols];
     // entry.append(&mut run_scope_category_mapping("local").unwrap());
     // entry.append(&mut model_category_mapping("MT_recon_2_2_entrez.mat").unwrap());
     new_data.push(entry);
@@ -75,12 +77,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     results.push(rr_predict_results.get(0));
 
-    let svr_params = SVRParameters::default();
-    debug!("svr_params: {:?}", svr_params);
-    let svr_predict_results = SVR::fit(&x, &y, svr_params).and_then(|a| a.predict(&x_test)).unwrap();
-    info!("svr_predict_results: {:?}", svr_predict_results);
-
-    results.push(svr_predict_results.get(0));
+    // let svr_params = SVRParameters::default();
+    // debug!("svr_params: {:?}", svr_params);
+    // let svr_predict_results = SVR::fit(&x, &y, svr_params).and_then(|a| a.predict(&x_test)).unwrap();
+    // info!("svr_predict_results: {:?}", svr_predict_results);
+    //
+    // results.push(svr_predict_results.get(0));
 
     let lr_params = LinearRegressionParameters::default();
     debug!("lr_params: {:?}", lr_params);
@@ -103,15 +105,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     results.push(en_predict_results.get(0));
 
-    let knn_params = KNNRegressorParameters::default();
-    debug!("knn_params: {:?}", knn_params);
-    let knn_predict_results = KNNRegressor::fit(&x, &y, knn_params).and_then(|a| a.predict(&x_test)).unwrap();
-    info!("knn_predict_results: {:?}", knn_predict_results);
-
-    results.push(knn_predict_results.get(0));
+    // let knn_params = KNNRegressorParameters::default();
+    // debug!("knn_params: {:?}", knn_params);
+    // let knn_predict_results = KNNRegressor::fit(&x, &y, knn_params).and_then(|a| a.predict(&x_test)).unwrap();
+    // info!("knn_predict_results: {:?}", knn_predict_results);
+    //
+    // results.push(knn_predict_results.get(0));
 
     info!("Duration: {}", format_duration(start.elapsed()).to_string());
-    print!("{}", results.mean() as i32);
+    print!("{}\n", results.mean() as i32);
     Ok(())
 }
 
@@ -126,12 +128,28 @@ pub fn load_dataset(input: &str) -> Result<(DenseMatrix<f64>, Vec<f64>), Box<dyn
 
     let mut features: Vec<Vec<f64>> = Vec::new();
 
+    let threshold_type_cat_map = series_encoder::CategoryMapper::<&str>::from_positional_category_vec(vec!["local", "global"]);
+    let local_threshold_type_cat_map = series_encoder::CategoryMapper::<&str>::from_positional_category_vec(vec!["minmaxmean", "mean"]);
+    let value_type_cat_map = series_encoder::CategoryMapper::<&str>::from_positional_category_vec(vec!["percentile", "value"]);
+    let model_cat_map = series_encoder::CategoryMapper::<&str>::from_positional_category_vec(vec![
+        "MT_iCHOv1_final.mat",
+        "MT_iMM1415.mat",
+        "MT_iRno.mat",
+        "MT_quek14.mat",
+        "MT_recon_2_2_entrez.mat",
+        "MT_inesMouseModel.mat",
+    ]);
+
+    // 15846,96,MT_inesMouseModel.mat,local,percentile,20,minmaxmean,25,75,9.589445
     training_data.clone().into_iter().for_each(|record| {
         let mut row_data = vec![];
-        row_data.push(record.sample_number as f64);
         row_data.push(record.rows as f64);
-        // row_data.append(&mut run_scope_category_mapping(&record.run_scope.as_str()).unwrap());
-        // row_data.append(&mut model_category_mapping(&record.model.as_str()).unwrap());
+        row_data.push(record.sample_number as f64);
+        // let mut model_one_hot_encoded = model_cat_map.get_one_hot(&record.model.as_str()).expect(format!("record: {:?}", record).as_str());
+        // row_data.append(&mut model_one_hot_encoded);
+        // row_data.append(&mut threshold_type_cat_map.get_one_hot(&record.threshold_type.as_str()).unwrap());
+        // row_data.append(&mut value_type_cat_map.get_one_hot(&record.value_type.as_str()).unwrap());
+        // row_data.append(&mut local_threshold_type_cat_map.get_one_hot(&record.local_threshold_type.as_str()).unwrap());
         features.push(row_data);
     });
 
@@ -143,55 +161,64 @@ pub fn load_dataset(input: &str) -> Result<(DenseMatrix<f64>, Vec<f64>), Box<dyn
     Ok((DenseMatrix::from_2d_vec(&features), target))
 }
 
-pub fn run_scope_category_mapping(run_scope: &str) -> Result<Vec<f64>, Box<dyn error::Error>> {
-    let category_mapper = series_encoder::CategoryMapper::<&str>::from_positional_category_vec(vec!["local", "global"]);
-    let encoded_category_mapper: Vec<f64> = category_mapper.get_one_hot(&run_scope).unwrap();
-    Ok(encoded_category_mapper)
-}
-
-pub fn model_category_mapping(model: &str) -> Result<Vec<f64>, Box<dyn error::Error>> {
-    let category_mapper = series_encoder::CategoryMapper::<&str>::from_positional_category_vec(vec![
-        "MT_iCHOv1_final.mat",
-        "MT_iHsa.mat",
-        "MT_iMM1415.mat",
-        "MT_inesMouseModel.mat",
-        "MT_iRno.mat",
-        "MT_quek14.mat",
-        "MT_recon_1.mat",
-        "MT_recon_2.mat",
-        "MT_recon_2_2_entrez.mat",
-    ]);
-    let encoded_category_mapper: Vec<f64> = category_mapper.get_one_hot(&model).unwrap();
-    Ok(encoded_category_mapper)
-}
-
-//170.34,32,2490,local,MT_recon_2_2_entrez.mat
+// 15846,96,MT_inesMouseModel.mat,local,percentile,20,minmaxmean,25,75,9.589445
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CellfieRuntimeData {
-    #[serde(rename = "duration")]
-    pub duration: f64,
+    #[serde(rename = "rows")]
+    pub rows: i32,
 
     #[serde(rename = "sample_number")]
     pub sample_number: i32,
 
-    #[serde(rename = "rows")]
-    pub rows: i32,
-
-    #[serde(rename = "run_scope")]
-    pub run_scope: String,
-
     #[serde(rename = "model")]
     pub model: String,
+
+    #[serde(rename = "threshold_type")]
+    pub threshold_type: String,
+
+    #[serde(rename = "value_type")]
+    pub value_type: String,
+
+    #[serde(rename = "value")]
+    pub value: i32,
+
+    #[serde(rename = "local_threshold_type")]
+    pub local_threshold_type: String,
+
+    #[serde(rename = "threshold_low")]
+    pub threshold_low: i32,
+
+    #[serde(rename = "threshold_high")]
+    pub threshold_high: i32,
+
+    #[serde(rename = "duration")]
+    pub duration: f64,
 }
 
 impl CellfieRuntimeData {
-    pub fn new(duration: f64, sample_number: i32, rows: i32, run_scope: String, model: String) -> CellfieRuntimeData {
+    pub fn new(
+        rows: i32,
+        sample_number: i32,
+        model: String,
+        threshold_type: String,
+        value_type: String,
+        value: i32,
+        local_threshold_type: String,
+        threshold_low: i32,
+        threshold_high: i32,
+        duration: f64,
+    ) -> CellfieRuntimeData {
         CellfieRuntimeData {
-            duration,
-            sample_number,
             rows,
-            run_scope,
+            sample_number,
             model,
+            threshold_type,
+            value_type,
+            value,
+            local_threshold_type,
+            threshold_low,
+            threshold_high,
+            duration,
         }
     }
 }
@@ -200,8 +227,8 @@ impl fmt::Display for CellfieRuntimeData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "CellfieRuntimeData(duration: {}, sample_number: {}, rows: {}, run_scope: {}, model: {})",
-            self.duration, self.sample_number, self.rows, self.run_scope, self.model
+            "CellfieRuntimeData(duration: {}, sample_number: {}, rows: {}, threshold_type: {}, model: {})",
+            self.duration, self.sample_number, self.rows, self.threshold_type, self.model
         )
     }
 }
